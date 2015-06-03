@@ -1,0 +1,314 @@
+﻿@{
+    Layout = "";    
+}
+
+<script>
+$(document).ready(function() {
+
+    var basicSupportHash = @Html.Raw(Newtonsoft.Json.JsonConvert.DeserializeObject(ViewBag.BasicSupportHash));
+    
+    function EconomicTableModel() {
+        this._economicTableVersion = "10%2F2009";
+        this._combinedNetLower =  { "09%2F2000" :  600, "10%2F2009" :  1000 };
+        this._combinedNetUpper =  { "09%2F2000" : 7000, "10%2F2009" : 12000 };
+        this._currentLower = this._combinedNetLower[this._economicTableVersion];
+        this._currentUpper = this._combinedNetUpper[this._economicTableVersion];
+        this._combinedNet = this._combinedNetLower[this._economicTableVersion];
+        this._numberOfChildren = 1;
+        this._childAge = 0;
+    }
+
+
+    EconomicTableModel.prototype = {
+        constructor: EconomicTableModel,
+        setCombinedNet: function(combinedNetIn) {
+            if (isNaN(parseFloat(combinedNetIn))) {
+                combinedNetIn = 0;
+            }
+            combinedNetIn = parseFloat(combinedNetIn);
+            if (combinedNetIn > this.getUpper()) {
+                combinedNetIn = this.getUpper();
+            }
+            if (combinedNetIn >= this.getLower()) {
+                combinedNetIn = Math.round(combinedNetIn / 100) * 100;
+            }
+            this._combinedNet = combinedNetIn;
+        },
+        getCombinedNet: function() {
+            return this._combinedNet;
+        },
+        setNumberOfChildren: function(numberOfChildrenIn) {
+            if (isNaN(parseFloat(numberOfChildrenIn))) {
+                numberOfChildrenIn = 1;
+            }
+            numberOfChildrenIn = parseFloat(numberOfChildrenIn);
+            numberOfChildrenIn = parseInt(numberOfChildrenIn);
+            if (numberOfChildrenIn < 1) {
+                numberOfChildrenIn = 1;
+            }
+            this._numberOfChildren = numberOfChildrenIn;
+
+        },
+        getNumberOfChildren: function() {
+            return this._numberOfChildren;
+        },
+        setChildAge: function(childAgeIn) {
+            if (isNaN(parseFloat(childAgeIn))) {
+                childAgeIn = 0;
+            }
+            childAgeIn = parseFloat(childAgeIn);
+            childAgeIn = parseInt(childAgeIn);
+            if (childAgeIn < 0) {
+                childAgeIn = 0;
+            }
+            this._childAge = childAgeIn;
+        },
+        getChildAge: function() {
+            return this._childAge;
+        },
+        setTableVersion: function(tableVersionIn) {
+            tableVersionIn = tableVersionIn.replace(/\//, "%2F");
+            if (tableVersionIn != '09%2F2000') {
+                tableVersionIn = '10%2F2009';
+            }
+            this._economicTableVersion = tableVersionIn;
+            this.setLower();
+            this.setUpper()
+        },
+        getTableVersion: function() {
+            return this._economicTableVersion;
+        },
+        setUpper: function() {
+            this._currentUpper = this._combinedNetUpper[this._economicTableVersion];
+        },
+        getUpper: function() {
+            return this._currentUpper;
+        },
+        setLower: function() {
+            this._currentLower = this._combinedNetLower[this._economicTableVersion];
+        },
+        getLower: function() {
+            return this._currentLower;
+        },
+        getBasicSupportObligation: function() {
+            var returnValue = 0;
+            var combinedNet = this.getCombinedNet();
+            var trueNumberOfChildren, adjustedNumberOfChildren;
+            trueNumberOfChildren = this.getNumberOfChildren();
+            adjustedNumberOfChildren = ((trueNumberOfChildren > 5) ? (5) : (trueNumberOfChildren));
+            var age;
+            age = this.getChildAge();
+            var isUnderTwelve;
+            isUnderTwelve = ((age < 12) ? "True" : "False");
+            if (combinedNet >= this.getLower()) {
+                returnValue = basicSupportHash[combinedNet][adjustedNumberOfChildren][isUnderTwelve];
+            }
+            if (trueNumberOfChildren > 5) {
+                returnValue = Math.round(returnValue - (((trueNumberOfChildren - 5) * .05) * returnValue), 0);
+            }
+            if (returnValue < 50) {
+                returnValue = 50;
+            }
+            return returnValue;
+        }
+    };
+
+
+    function GetBasicSupportObligation(combinedNet, numberOfChildren, age) {
+        rv = 0;
+        et = new EconomicTableModel();
+        et.setCombinedNet(combinedNet);
+        et.setNumberOfChildren(numberOfChildren);
+        et.setChildAge(age);
+        rv = et.getBasicSupportObligation();
+        return rv;
+    }
+
+    var vals = {
+        "cpNet": "", //person paying
+        "cpShare": "",
+        "ncpNet": "", //person receiving
+        "ncpShare": "",
+        "totalNet": "",
+        "noKids": "", //number of children
+        "noKidsUnder12": "", //number of children under 12
+        "noKids12AndOver": "", //number of children over 12
+        "cpEst": "",
+        "ncpEst": "",
+        "totalEst": ""
+    };
+    
+    var checkCalc = function(thisId, tempVal) {
+        var resultMessage = "";
+        switch (thisId) {
+            case "ncpNet":
+                var affectedEl = $("#cpNet");
+                var oldHint = affectedEl.data("hint");
+                if (!(tempVal >= 0 && tempVal <= 12000)) {
+                    //resultMessage += "<span class='error'>Take home pay of person paying must be between 0 and 12000.</span>\n";
+                    $("#"+thisId).data("error", "<div class='error'>Take home pay of person paying must be between 0 and 12000.</div>\n");
+                    affectedEl.data("hint", "Fix value above.");
+                } else {
+                    var newMax = affectedEl.data("max") - tempVal;
+                    affectedEl.data("hint", affectedEl.data("min")+"-"+newMax);
+                    $("#"+thisId).data("error", "");
+                }
+                if (affectedEl.val() === oldHint) {
+                    affectedEl.val(affectedEl.data("hint"));
+                }
+                break;
+            case "cpNet":
+                var affectedEl = $("#ncpNet");
+                var oldHint = affectedEl.data("hint");
+                if (!(tempVal >= 0 && tempVal <= 12000)) {
+                    //resultMessage += "<span class='error'>Take home pay of person receiving must be between 0 and 12000.</span>\n";
+                    $("#"+thisId).data("error", "<div class='error'>Take home pay of person receiving must be between 0 and 12000.</div>\n");
+                    affectedEl.data("hint", "Fix value below.");
+                } else {
+                    var newMax = affectedEl.data("max") - tempVal;
+                    affectedEl.data("hint", affectedEl.data("min")+"-"+newMax);
+                    $("#"+thisId).data("error", "");
+                }
+                if (affectedEl.val() === oldHint) {
+                    affectedEl.val(affectedEl.data("hint"));
+                }
+                break;
+            case "noKids":
+                var affectedEl = $("#noKidsUnder12");
+                var oldHint = affectedEl.data("hint");
+                if (!(tempVal >= 1 && tempVal <= 20)) {
+                    //resultMessage += "<span class='error'>Number of children must be between 0 and 20.</span>\n";
+                    $("#"+thisId).data("error", "<div class='error'>Number of children must be between 1 and 20.</div>\n");
+                    affectedEl.data("hint", "Fix value above.");
+                } else {
+                    var newMax = tempVal;
+                    affectedEl.data("hint", affectedEl.data("min")+"-"+newMax);
+                    $("#"+thisId).data("error", "");
+                }
+                if (affectedEl.val() === oldHint) {
+                    affectedEl.val(affectedEl.data("hint"));
+                }
+                break;
+            case "noKidsUnder12":
+                var affectedEl = $("#noKids");
+                var oldHint = affectedEl.data("hint");
+                if (!(tempVal >= 0 && tempVal <= 20)) {
+                    //resultMessage += "<span class='error'>Number of children under 12 must be between 0 and 20.</span>\n";
+                    $("#"+thisId).data("error", "<div class='error'>Number of children under 12 must be between 0 and 20.</div>\n");
+                    affectedEl.data("hint", "Fix value below.");
+                } else {
+                    var newMin = tempVal;
+                    affectedEl.data("hint", newMin+"-"+affectedEl.data("max"));
+                    $("#"+thisId).data("error", "");
+                }
+                if (affectedEl.val() === oldHint) {
+                    affectedEl.val(affectedEl.data("hint"));
+                }
+                break;
+            default:
+                response([]);
+                return;
+        }
+        $(".input").each(function() {
+            if ($(this).data("error") !== "") {
+                resultMessage += $(this).data("error");
+            }
+        });
+        vals[thisId] = tempVal;
+        var canCalculate = true;
+        $.each({"ncpNet":"", "cpNet":"", "noKids":"", "noKidsUnder12":""}, function(key) { canCalculate = !(vals[key] === "") && canCalculate; });
+        vals.totalNet = vals.cpNet + vals.ncpNet;
+        if (vals.totalNet > 12000) {
+            resultMessage += "<div class='error'>Total combined net income cannot exceed 12000.</div>";
+        }
+        vals.noKids12AndOver = vals.noKids - vals.noKidsUnder12;
+        if (vals.noKids12AndOver < 0) {
+            resultMessage += "<div class='error'>Number of children under 12 cannot be greater than the total number of children.</div>";
+        }
+        if (canCalculate && resultMessage === "") {
+            if (vals.totalNet !== 0) {
+                vals.cpShare = vals.cpNet / vals.totalNet;
+                vals.ncpShare = vals.ncpNet / vals.totalNet;
+            } else {
+                vals.cpShare = 0.5;
+                vals.ncpShare = 0.5;
+            }
+            var twelveAndOverObligation = GetBasicSupportObligation(vals.totalNet, vals.noKids, 12) * vals.noKids12AndOver;
+            var elevenAndUnderObligation = GetBasicSupportObligation(vals.totalNet, vals.noKids, 11) * vals.noKidsUnder12;
+            vals.totalEst = twelveAndOverObligation + elevenAndUnderObligation;
+            vals.cpEst = parseInt(vals.totalEst * vals.cpShare);
+            vals.ncpEst = vals.totalEst - vals.cpEst;
+            vals.ncpEst = (vals.ncpEst < (50 * vals.noKids)) ? 50 * vals.noKids : vals.ncpEst;
+            resultMessage = "<span class='result'>Your monthly child support obligation will be approximately $" + vals.ncpEst + "</span>";
+        }
+        $("#result").html(resultMessage);
+        if (resultMessage !== "") {
+            $("#result").fadeIn();
+        } else {
+            $("#result").fadeOut();
+        }
+    }
+
+    var completeHandler = function(request, response) {
+        var $this = $(this)[0].element[0];
+        var tempVal = parseInt(request.term);
+        checkCalc($this.id, tempVal);
+        response([]);
+    };
+   
+    $(".input").autocomplete({
+        minLength: 0,
+        source: completeHandler,
+        disabled: true
+    });
+    
+    $(".input").blur(function() {
+        var $this = $(this);
+        checkCalc($this.attr("id"), parseInt($this.val()));
+        if ($this.val() === "") {
+            $this.val($this.data("hint")).addClass("empty");
+        }
+        $this.autocomplete("option", "disabled", true);
+    });
+    
+    $(".input").addClass("empty").each(function() {
+        var $this = $(this);
+        var hint = $this.data("min")+"-"+$this.data("max");
+        $this.data("hint", hint);
+        $this.val($this.data("hint"));
+        $this.data("error", "");
+    });
+    
+    $(".input").focus(function() {
+        var $this = $(this);
+        if ($this.val() === $this.data("hint")) {
+            $this.val("").removeClass("empty");
+        }
+        $this.autocomplete("option", "disabled", false);
+    });
+});
+
+</script>
+<form acton="">
+    <fieldset> 
+    <legend style="display:none">Quick Estimator</legend>
+    <div> 
+    <label for="cpNet">How much is the monthly take home pay of the person responsible for <strong>paying</strong> child support?</label> 
+    <input type="text" name="ncpNet" id="ncpNet" class="input" value="" data-min="0" data-max="12000" /> 
+    </div> 
+    <div> 
+    <label for="ncpNet">How much is the monthly take home pay of the person who will <strong>receive</strong> child support?</label> 
+    <input type="text" name="cpNet" id="cpNet" class="input" value="" data-min="0" data-max="12000"   /> 
+    </div> 
+    <div> 
+    <label for="noKids">How many children do you two have together?</label> 
+    <input type="text" name="noKids" id="noKids" class="input" value="" data-min="1" data-max="20" /> 
+    </div> 
+    <div> 
+    <label for="noKidsUnder12">How many of those children are under 12?</label> 
+    <input type="text" name="noKidsUnder12" id="noKidsUnder12" class="input" value="" data-min="0" data-max="20"  /> 
+    </div> 
+    <div id="result"> 
+    </div> 
+    </fieldset>
+</form>
